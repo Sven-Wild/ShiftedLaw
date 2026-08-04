@@ -2,15 +2,19 @@ package com.shiftedlaw.rolllaw;
 
 import net.minecraft.entity.boss.BossBar;
 import net.minecraft.entity.boss.ServerBossBar;
+import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvent;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.GameMode;
+import net.minecraft.world.Heightmap;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -24,13 +28,18 @@ import java.util.UUID;
 
 /**
  * Tracks which Law each player holds, the pool of unclaimed Laws, the
- * "? ? ?" roll animation, and the shared countdown once everyone has rolled.
+ * "? ? ?" roll animation, the shared countdown once everyone has rolled,
+ * the running challenge timer, and the "everyone died" banishment
+ * punishment before a fresh round begins.
  */
 public class LawManager {
 
 	private static final int ROLL_TOTAL_TICKS = 30;
 	private static final int ROLL_PULSE_INTERVAL = 6;
 	private static final int COUNTDOWN_TOTAL_TICKS = 200;
+	private static final int PUNISHMENT_TOTAL_TICKS = 30 * 20;
+	private static final int PUNISHMENT_DISTANCE = 6000;
+	private static final String OBJECTIVE_TEXT = "Having everyone alive and beating the dragon";
 
 	private static final String SUSPENSE_TEXT = "> ? ? ? <";
 
@@ -43,6 +52,15 @@ public class LawManager {
 	private boolean countdownActive = false;
 	private int countdownTicks = 0;
 	private ServerBossBar countdownBossBar;
+
+	private boolean punishmentActive = false;
+	private int punishmentTicksRemaining = 0;
+	private ServerWorld punishmentWorld;
+	private double punishmentX;
+	private double punishmentY;
+	private double punishmentZ;
+
+	private int elapsedTicks = 0;
 
 	public Law getLaw(UUID playerId) {
 		return assignedLaws.get(playerId);
@@ -104,6 +122,11 @@ public class LawManager {
 	}
 
 	public void tick(MinecraftServer server) {
+		elapsedTicks++;
+		if (elapsedTicks % 20 == 0) {
+			broadcastActionBar(server, Text.literal("⏱ " + formatTimer(elapsedTicks) + " — " + OBJECTIVE_TEXT).formatted(Formatting.GOLD));
+		}
+
 		Iterator<RollAnimation> iterator = activeRolls.iterator();
 		while (iterator.hasNext()) {
 			RollAnimation animation = iterator.next();
@@ -121,6 +144,9 @@ public class LawManager {
 
 		if (countdownActive) {
 			tickCountdown(server);
+		}
+		if (punishmentActive) {
+			tickPunishment(server);
 		}
 	}
 
@@ -216,13 +242,12 @@ public class LawManager {
 	}
 
 	private void checkRoundReset(MinecraftServer server) {
-		if (assignedLaws.isEmpty()) {
+		if (assignedLaws.isEmpty() || punishmentActive) {
 			return;
 		}
 		boolean everyoneEliminated = assignedLaws.keySet().stream().allMatch(eliminated::contains);
 		if (everyoneEliminated) {
-			resetRound(server, Text.literal("Everyone has fallen! Starting a new round - roll your Law again with /rolllaw!")
-					.formatted(Formatting.AQUA, Formatting.BOLD));
+			startPunishment(server);
 		}
 	}
 
@@ -244,11 +269,64 @@ public class LawManager {
 
 	/**
 	 * OP-only: force a full round reset right now, regardless of whether
-	 * anyone has actually died.
+	 * anyone has actually died. Cancels any banishment punishment in progress.
 	 */
 	public void adminForceReset(MinecraftServer server) {
+		punishmentActive = false;
 		resetRound(server, Text.literal("An operator reset the round - roll your Law again with /rolllaw!")
 				.formatted(Formatting.AQUA, Formatting.BOLD));
+	}
+
+	/**
+	 * Teleports everyone 6000 blocks from world spawn (one shared, randomly
+	 * chosen direction), freezes them there via constant re-teleporting
+	 * (works regardless of gamemode, unlike the Slowness-based freeze, since
+	 * everyone is already in spectator by this point), and applies Darkness
+	 * for the punishment's duration. Automatically rolls into a full round
+	 * reset once the timer runs out.
+	 */
+	private void startPunishment(MinecraftServer server) {
+		punishmentWorld = server.getOverworld();
+		BlockPos spawn = punishmentWorld.getSpawnPos();
+		double angle = random.nextDouble() * Math.PI * 2;
+		int targetX = spawn.getX() + (int) Math.round(Math.cos(angle) * PUNISHMENT_DISTANCE);
+		int targetZ = spawn.getZ() + (int) Math.round(Math.sin(angle) * PUNISHMENT_DISTANCE);
+
+		punishmentWorld.getChunk(targetX >> 4, targetZ >> 4);
+		int targetY = punishmentWorld.getTopY(Heightmap.Type.WORLD_SURFACE, targetX, targetZ);
+
+		punishmentActive = true;
+		punishmentTicksRemaining = PUNISHMENT_TOTAL_TICKS;
+		punishmentX = targetX + 0.5;
+		punishmentY = targetY;
+		punishmentZ = targetZ + 0.5;
+
+		elapsedTicks = 0;
+
+		for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+			player.teleport(punishmentWorld, punishmentX, punishmentY, punishmentZ, player.getYaw(), player.getPitch());
+			player.addStatusEffect(new StatusEffectInstance(StatusEffects.DARKNESS, PUNISHMENT_TOTAL_TICKS + 20, 0, true, false, false));
+		}
+
+		broadcast(server, Text.literal("Everyone has fallen! Banished into the dark, 6000 blocks from home...")
+				.formatted(Formatting.DARK_PURPLE, Formatting.BOLD));
+		broadcastTitle(server, Text.literal("YOU HAVE FAILED").formatted(Formatting.DARK_RED, Formatting.BOLD),
+				Text.literal("Banished into the darkness...").formatted(Formatting.GRAY));
+		broadcastSound(server, SoundEvents.ENTITY_WITHER_SPAWN, 1.0f, 0.6f);
+	}
+
+	private void tickPunishment(MinecraftServer server) {
+		punishmentTicksRemaining--;
+
+		for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+			player.teleport(punishmentWorld, punishmentX, punishmentY, punishmentZ, player.getYaw(), player.getPitch());
+		}
+
+		if (punishmentTicksRemaining <= 0) {
+			punishmentActive = false;
+			resetRound(server, Text.literal("A new attempt begins - roll your Law again with /rolllaw!")
+					.formatted(Formatting.AQUA, Formatting.BOLD));
+		}
 	}
 
 	private void resetRound(MinecraftServer server, Text announcement) {
@@ -263,6 +341,7 @@ public class LawManager {
 			player.changeGameMode(GameMode.SURVIVAL);
 			player.setHealth(player.getMaxHealth());
 			player.getHungerManager().setFoodLevel(20);
+			player.removeStatusEffect(StatusEffects.DARKNESS);
 		}
 
 		broadcast(server, announcement);
@@ -341,9 +420,26 @@ public class LawManager {
 		}
 	}
 
+	private static String formatTimer(int ticks) {
+		int totalSeconds = ticks / 20;
+		int hours = totalSeconds / 3600;
+		int minutes = (totalSeconds % 3600) / 60;
+		int seconds = totalSeconds % 60;
+		if (hours > 0) {
+			return String.format("%d:%02d:%02d", hours, minutes, seconds);
+		}
+		return String.format("%02d:%02d", minutes, seconds);
+	}
+
 	private void broadcast(MinecraftServer server, Text text) {
 		for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
 			player.sendMessage(text, false);
+		}
+	}
+
+	private void broadcastActionBar(MinecraftServer server, Text text) {
+		for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+			player.sendMessage(text, true);
 		}
 	}
 
