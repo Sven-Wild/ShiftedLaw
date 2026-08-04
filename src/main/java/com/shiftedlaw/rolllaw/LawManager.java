@@ -1,8 +1,14 @@
 package com.shiftedlaw.rolllaw;
 
+import net.minecraft.entity.boss.BossBar;
+import net.minecraft.entity.boss.ServerBossBar;
 import net.minecraft.entity.effect.StatusEffects;
+import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.sound.SoundCategory;
+import net.minecraft.sound.SoundEvent;
+import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.world.GameMode;
@@ -37,6 +43,7 @@ public class LawManager {
 
 	private boolean countdownActive = false;
 	private int countdownTicks = 0;
+	private ServerBossBar countdownBossBar;
 
 	public Law getLaw(UUID playerId) {
 		return assignedLaws.get(playerId);
@@ -132,6 +139,11 @@ public class LawManager {
 
 		broadcast(server, Text.literal(player.getName().getString() + " died and is now spectating! Their Law ("
 				+ law.getDisplayName() + ") stays the same. Countdown reset.").formatted(Formatting.RED));
+		broadcastTitle(server, Text.literal(player.getName().getString() + " eliminated!").formatted(Formatting.RED, Formatting.BOLD),
+				Text.literal("Countdown reset").formatted(Formatting.GRAY));
+		broadcastSound(server, SoundEvents.BLOCK_GLASS_BREAK, 1.0f, 1.0f);
+		LawScoreboard.show(server, this);
+
 		cancelCountdown(server);
 		checkRoundReset(server);
 	}
@@ -179,6 +191,11 @@ public class LawManager {
 		for (String con : animation.resultLaw.getCons()) {
 			broadcast(server, Text.literal("  - " + con).formatted(Formatting.RED));
 		}
+
+		broadcastTitle(server, Text.literal(animation.player.getName().getString() + " rolled!").formatted(Formatting.GOLD, Formatting.BOLD),
+				Text.literal(animation.resultLaw.getDisplayName()).formatted(Formatting.YELLOW));
+		broadcastSound(server, SoundEvents.UI_TOAST_CHALLENGE_COMPLETE, 1.0f, 1.0f);
+		LawScoreboard.show(server, this);
 
 		checkCountdown(server);
 	}
@@ -241,6 +258,7 @@ public class LawManager {
 		pool.clear();
 		pool.addAll(List.of(Law.values()));
 		cancelCountdown(server);
+		LawScoreboard.hide(server);
 
 		for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
 			player.changeGameMode(GameMode.SURVIVAL);
@@ -249,12 +267,25 @@ public class LawManager {
 		}
 
 		broadcast(server, announcement);
+		broadcastTitle(server, Text.literal("New Round!").formatted(Formatting.AQUA, Formatting.BOLD),
+				Text.literal("Roll again with /rolllaw").formatted(Formatting.GRAY));
+		broadcastSound(server, SoundEvents.BLOCK_BEACON_ACTIVATE, 1.0f, 1.0f);
 	}
 
 	private void startCountdown(MinecraftServer server) {
 		countdownActive = true;
 		countdownTicks = COUNTDOWN_TOTAL_TICKS;
 		broadcast(server, Text.literal("Everyone has their Law! Countdown starting...").formatted(Formatting.AQUA, Formatting.BOLD));
+		broadcastSound(server, SoundEvents.BLOCK_NOTE_BLOCK_BELL, 1.0f, 1.0f);
+
+		countdownBossBar = new ServerBossBar(Text.literal("Get ready...").formatted(Formatting.GOLD),
+				BossBar.Color.YELLOW, BossBar.Style.NOTCHED_10);
+		countdownBossBar.setPercent(1.0f);
+		for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+			if (assignedLaws.containsKey(player.getUuid()) && !eliminated.contains(player.getUuid())) {
+				countdownBossBar.addPlayer(player);
+			}
+		}
 	}
 
 	private void cancelCountdown(MinecraftServer server) {
@@ -263,23 +294,43 @@ public class LawManager {
 			countdownTicks = 0;
 			broadcast(server, Text.literal("Countdown reset!").formatted(Formatting.RED, Formatting.BOLD));
 		}
+		clearBossBar();
 	}
 
 	private void tickCountdown(MinecraftServer server) {
 		countdownTicks--;
 
+		if (countdownBossBar != null) {
+			countdownBossBar.setPercent(Math.max(0.0f, (float) countdownTicks / COUNTDOWN_TOTAL_TICKS));
+		}
+
 		if (countdownTicks <= 0) {
 			countdownActive = false;
 			unfreezeParticipants(server);
+			clearBossBar();
 			broadcast(server, Text.literal("⚡ GO! ⚡").formatted(Formatting.YELLOW, Formatting.BOLD));
+			broadcastTitle(server, Text.literal("⚡ GO! ⚡").formatted(Formatting.YELLOW, Formatting.BOLD), Text.empty());
+			broadcastSound(server, SoundEvents.ENTITY_PLAYER_LEVELUP, 1.0f, 1.0f);
 			return;
 		}
 
 		if (countdownTicks % 20 == 0) {
 			int secondsRemaining = countdownTicks / 20;
 			if (secondsRemaining >= 1 && secondsRemaining <= 5) {
+				if (countdownBossBar != null) {
+					countdownBossBar.setName(Text.literal(secondsRemaining + "...").formatted(Formatting.GOLD, Formatting.BOLD));
+				}
 				broadcast(server, Text.literal(String.valueOf(secondsRemaining)).formatted(Formatting.RED, Formatting.BOLD));
+				broadcastTitle(server, Text.literal(String.valueOf(secondsRemaining)).formatted(Formatting.RED, Formatting.BOLD), Text.empty());
+				broadcastSound(server, SoundEvents.BLOCK_NOTE_BLOCK_PLING, 1.0f, 1.0f);
 			}
+		}
+	}
+
+	private void clearBossBar() {
+		if (countdownBossBar != null) {
+			countdownBossBar.clearPlayers();
+			countdownBossBar = null;
 		}
 	}
 
@@ -294,6 +345,18 @@ public class LawManager {
 	private void broadcast(MinecraftServer server, Text text) {
 		for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
 			player.sendMessage(text, false);
+		}
+	}
+
+	private void broadcastTitle(MinecraftServer server, Text title, Text subtitle) {
+		for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+			LawTitles.sendTitle(player, title, subtitle);
+		}
+	}
+
+	private void broadcastSound(MinecraftServer server, RegistryEntry<SoundEvent> sound, float volume, float pitch) {
+		for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+			player.getWorld().playSound(null, player.getBlockPos(), sound, SoundCategory.PLAYERS, volume, pitch);
 		}
 	}
 
