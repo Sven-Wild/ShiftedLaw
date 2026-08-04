@@ -13,6 +13,9 @@
 	"entrypoints": {
 		"main": [
 			"com.shiftedlaw.rolllaw.RollLawMod"
+		],
+		"client": [
+			"com.shiftedlaw.rolllaw.client.ShiftedLawClient"
 		]
 	},
 	"depends": {

@@ -65,8 +65,35 @@ public class LawManager {
 		}
 
 		Law chosen = pool.remove(random.nextInt(pool.size()));
-		activeRolls.add(new RollAnimation(player, chosen));
+		beginRollAnimation(player, chosen, server);
+	}
 
+	/**
+	 * OP-only: begin the roll animation for {@code player} locked to
+	 * {@code requestedLaw}. Falls back to a random Law from the pool if
+	 * {@code requestedLaw} is null or has already been claimed by someone
+	 * else. Silently does nothing if the player already has a Law, is
+	 * already rolling, or the pool is empty.
+	 */
+	public void adminAssignLaw(ServerPlayerEntity player, Law requestedLaw, MinecraftServer server) {
+		if (assignedLaws.containsKey(player.getUuid()) || isRolling(player)) {
+			return;
+		}
+
+		Law chosen;
+		if (requestedLaw != null && pool.remove(requestedLaw)) {
+			chosen = requestedLaw;
+		} else if (!pool.isEmpty()) {
+			chosen = pool.remove(random.nextInt(pool.size()));
+		} else {
+			return;
+		}
+
+		beginRollAnimation(player, chosen, server);
+	}
+
+	private void beginRollAnimation(ServerPlayerEntity player, Law chosen, MinecraftServer server) {
+		activeRolls.add(new RollAnimation(player, chosen));
 		broadcast(server, Text.literal(player.getName().getString() + " is rolling for a Law...").formatted(Formatting.GOLD));
 	}
 
