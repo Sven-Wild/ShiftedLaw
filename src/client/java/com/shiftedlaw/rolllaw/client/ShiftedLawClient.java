@@ -5,7 +5,6 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import org.lwjgl.glfw.GLFW;
@@ -26,7 +25,9 @@ public class ShiftedLawClient implements ClientModInitializer {
 
 	@Override
 	public void onInitializeClient() {
-		PayloadTypeRegistry.playC2S().register(OpenAdminGuiPayload.ID, OpenAdminGuiPayload.CODEC);
+		// The payload type is already registered once in RollLawMod#onInitialize,
+		// which (as a "main" entrypoint) runs on the client too - registering it
+		// again here would be a duplicate registration of the same ID.
 		KeyBindingHelper.registerKeyBinding(OPEN_ADMIN_GUI_KEY);
 
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
