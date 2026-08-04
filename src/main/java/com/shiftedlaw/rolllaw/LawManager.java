@@ -4,13 +4,16 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
+import net.minecraft.world.GameMode;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -27,6 +30,7 @@ public class LawManager {
 
 	private final List<Law> pool = new ArrayList<>(List.of(Law.values()));
 	private final Map<UUID, Law> assignedLaws = new HashMap<>();
+	private final Set<UUID> eliminated = new HashSet<>();
 	private final List<RollAnimation> activeRolls = new ArrayList<>();
 	private final Random random = new Random();
 
@@ -83,11 +87,17 @@ public class LawManager {
 			return;
 		}
 		Law law = assignedLaws.get(player.getUuid());
-		if (law != null) {
-			broadcast(server, Text.literal(player.getName().getString() + " died! Their Law (" + law.getDisplayName()
-					+ ") stays the same. Countdown reset.").formatted(Formatting.RED));
-			cancelCountdown(server);
+		if (law == null) {
+			return;
 		}
+
+		eliminated.add(player.getUuid());
+		player.changeGameMode(GameMode.SPECTATOR);
+
+		broadcast(server, Text.literal(player.getName().getString() + " died and is now spectating! Their Law ("
+				+ law.getDisplayName() + ") stays the same. Countdown reset.").formatted(Formatting.RED));
+		cancelCountdown(server);
+		checkRoundReset(server);
 	}
 
 	public void onPlayerJoin(ServerPlayerEntity player, MinecraftServer server) {
@@ -99,11 +109,13 @@ public class LawManager {
 			return;
 		}
 		activeRolls.removeIf(animation -> animation.player.getUuid().equals(player.getUuid()));
+		eliminated.remove(player.getUuid());
 		Law law = assignedLaws.remove(player.getUuid());
 		if (law != null) {
 			pool.add(law);
 		}
 		checkCountdown(server);
+		checkRoundReset(server);
 	}
 
 	private boolean isRolling(ServerPlayerEntity player) {
@@ -139,14 +151,43 @@ public class LawManager {
 		if (server == null) {
 			return;
 		}
-		List<ServerPlayerEntity> online = server.getPlayerManager().getPlayerList();
-		boolean allHaveLaws = !online.isEmpty() && online.stream().allMatch(p -> assignedLaws.containsKey(p.getUuid()));
+		List<ServerPlayerEntity> active = server.getPlayerManager().getPlayerList().stream()
+				.filter(p -> !eliminated.contains(p.getUuid()))
+				.toList();
+		boolean allHaveLaws = !active.isEmpty() && active.stream().allMatch(p -> assignedLaws.containsKey(p.getUuid()));
 
 		if (allHaveLaws && !countdownActive) {
 			startCountdown(server);
 		} else if (!allHaveLaws && countdownActive) {
 			cancelCountdown(server);
 		}
+	}
+
+	private void checkRoundReset(MinecraftServer server) {
+		if (assignedLaws.isEmpty()) {
+			return;
+		}
+		boolean everyoneEliminated = assignedLaws.keySet().stream().allMatch(eliminated::contains);
+		if (everyoneEliminated) {
+			resetRound(server);
+		}
+	}
+
+	private void resetRound(MinecraftServer server) {
+		assignedLaws.clear();
+		eliminated.clear();
+		pool.clear();
+		pool.addAll(List.of(Law.values()));
+		cancelCountdown(server);
+
+		for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+			player.changeGameMode(GameMode.SURVIVAL);
+			player.setHealth(player.getMaxHealth());
+			player.getHungerManager().setFoodLevel(20);
+		}
+
+		broadcast(server, Text.literal("Everyone has fallen! Starting a new round - roll your Law again with /rolllaw!")
+				.formatted(Formatting.AQUA, Formatting.BOLD));
 	}
 
 	private void startCountdown(MinecraftServer server) {
