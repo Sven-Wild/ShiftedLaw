@@ -3,7 +3,6 @@ package com.shiftedlaw.rolllaw;
 import net.minecraft.entity.boss.BossBar;
 import net.minecraft.entity.boss.ServerBossBar;
 import net.minecraft.entity.effect.StatusEffects;
-import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.sound.SoundCategory;
@@ -354,7 +353,7 @@ public class LawManager {
 		}
 	}
 
-	private void broadcastSound(MinecraftServer server, RegistryEntry<SoundEvent> sound, float volume, float pitch) {
+	private void broadcastSound(MinecraftServer server, SoundEvent sound, float volume, float pitch) {
 		for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
 			player.getWorld().playSound(null, player.getBlockPos(), sound, SoundCategory.PLAYERS, volume, pitch);
 		}
