@@ -60,7 +60,7 @@ public class LawManager {
 			return;
 		}
 		if (pool.isEmpty()) {
-			player.sendMessage(Text.literal("All 5 Laws have already been claimed!").formatted(Formatting.RED), false);
+			player.sendMessage(Text.literal("All " + Law.values().length + " Laws have already been claimed!").formatted(Formatting.RED), false);
 			return;
 		}
 
@@ -178,11 +178,37 @@ public class LawManager {
 		}
 		boolean everyoneEliminated = assignedLaws.keySet().stream().allMatch(eliminated::contains);
 		if (everyoneEliminated) {
-			resetRound(server);
+			resetRound(server, Text.literal("Everyone has fallen! Starting a new round - roll your Law again with /rolllaw!")
+					.formatted(Formatting.AQUA, Formatting.BOLD));
 		}
 	}
 
-	private void resetRound(MinecraftServer server) {
+	/**
+	 * OP-only: force the countdown to start right now for whoever currently
+	 * has a Law, without waiting for every online player to have rolled.
+	 */
+	public void adminForceStart(ServerPlayerEntity source, MinecraftServer server) {
+		if (assignedLaws.isEmpty()) {
+			source.sendMessage(Text.literal("Nobody has a Law yet - nothing to start.").formatted(Formatting.RED), false);
+			return;
+		}
+		if (countdownActive) {
+			source.sendMessage(Text.literal("The countdown is already running.").formatted(Formatting.RED), false);
+			return;
+		}
+		startCountdown(server);
+	}
+
+	/**
+	 * OP-only: force a full round reset right now, regardless of whether
+	 * anyone has actually died.
+	 */
+	public void adminForceReset(MinecraftServer server) {
+		resetRound(server, Text.literal("An operator reset the round - roll your Law again with /rolllaw!")
+				.formatted(Formatting.AQUA, Formatting.BOLD));
+	}
+
+	private void resetRound(MinecraftServer server, Text announcement) {
 		assignedLaws.clear();
 		eliminated.clear();
 		pool.clear();
@@ -195,8 +221,7 @@ public class LawManager {
 			player.getHungerManager().setFoodLevel(20);
 		}
 
-		broadcast(server, Text.literal("Everyone has fallen! Starting a new round - roll your Law again with /rolllaw!")
-				.formatted(Formatting.AQUA, Formatting.BOLD));
+		broadcast(server, announcement);
 	}
 
 	private void startCountdown(MinecraftServer server) {

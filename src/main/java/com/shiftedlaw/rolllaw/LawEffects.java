@@ -12,6 +12,7 @@ import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.damage.DamageTypes;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
+import net.minecraft.registry.tag.DamageTypeTags;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
@@ -43,6 +44,7 @@ public final class LawEffects {
 	public static void register(LawManager lawManager) {
 		ServerTickEvents.END_SERVER_TICK.register(server -> onTick(server, lawManager));
 		ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) -> onAllowDamage(entity, source, amount, lawManager));
+		ServerLivingEntityEvents.AFTER_DEATH.register((entity, source) -> onAnyDeath(entity, source, lawManager));
 	}
 
 	private static void onTick(MinecraftServer server, LawManager lawManager) {
@@ -64,6 +66,21 @@ public final class LawEffects {
 				case PHANTOM -> handlePhantom(player);
 				case INFERNO -> handleInferno(player);
 				case BEACON -> handleBeacon(server, player);
+				case MINER -> handleMiner(player);
+				case FROSTBOURNE -> handleFrostbourne(player);
+				case WARDENS_CURSE -> handleWardensCurse(player);
+				case ALCHEMIST -> handleAlchemist(player);
+				case NIGHTSTALKER -> handleNightstalker(player);
+				case JUGGERNAUT -> handleJuggernaut(player);
+				case LEAPER -> handleLeaper(player);
+				case VAMPIRE -> handleVampire(player);
+				case SUNBOUND -> handleSunbound(player);
+				case STORMCALLER -> handleStormcaller(player);
+				case HARVESTER -> handleHarvester(player);
+				case HOLLOW -> handleHollow(player);
+				case LEECH, REAPER, SUNDER -> {
+					// Purely reactive: handled in onAllowDamage / onAnyDeath below.
+				}
 			}
 		}
 	}
@@ -157,7 +174,111 @@ public final class LawEffects {
 		}
 	}
 
+	private static void handleMiner(ServerPlayerEntity player) {
+		player.addStatusEffect(new StatusEffectInstance(StatusEffects.HASTE, 40, 1, true, false, false));
+		if (tickCounter % 200 == 0) {
+			drainHunger(player, 1);
+		}
+	}
+
+	private static void handleFrostbourne(ServerPlayerEntity player) {
+		player.addStatusEffect(new StatusEffectInstance(StatusEffects.WATER_BREATHING, 40, 0, true, false, false));
+		player.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, 40, 0, true, false, false));
+	}
+
+	private static void handleWardensCurse(ServerPlayerEntity player) {
+		player.addStatusEffect(new StatusEffectInstance(StatusEffects.NIGHT_VISION, 40, 0, true, false, false));
+		player.addStatusEffect(new StatusEffectInstance(StatusEffects.NAUSEA, 40, 0, true, false, false));
+	}
+
+	private static void handleAlchemist(ServerPlayerEntity player) {
+		player.addStatusEffect(new StatusEffectInstance(StatusEffects.REGENERATION, 40, 0, true, false, false));
+		player.addStatusEffect(new StatusEffectInstance(StatusEffects.WEAKNESS, 40, 0, true, false, false));
+	}
+
+	private static void handleNightstalker(ServerPlayerEntity player) {
+		if (player.isSneaking()) {
+			player.addStatusEffect(new StatusEffectInstance(StatusEffects.INVISIBILITY, 20, 0, true, false, false));
+		}
+		player.addStatusEffect(new StatusEffectInstance(StatusEffects.HUNGER, 40, 0, true, false, false));
+	}
+
+	private static void handleJuggernaut(ServerPlayerEntity player) {
+		player.addStatusEffect(new StatusEffectInstance(StatusEffects.RESISTANCE, 40, 0, true, false, false));
+		player.addStatusEffect(new StatusEffectInstance(StatusEffects.MINING_FATIGUE, 40, 0, true, false, false));
+	}
+
+	private static void handleLeaper(ServerPlayerEntity player) {
+		player.addStatusEffect(new StatusEffectInstance(StatusEffects.JUMP_BOOST, 40, 1, true, false, false));
+		player.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, 40, 0, true, false, false));
+	}
+
+	private static void handleVampire(ServerPlayerEntity player) {
+		ServerWorld world = (ServerWorld) player.getWorld();
+		if (isNight(world)) {
+			player.addStatusEffect(new StatusEffectInstance(StatusEffects.REGENERATION, 40, 0, true, false, false));
+		} else if (tickCounter % 100 == 0) {
+			drainHunger(player, 1);
+		}
+	}
+
+	private static void handleSunbound(ServerPlayerEntity player) {
+		ServerWorld world = (ServerWorld) player.getWorld();
+		if (isNight(world)) {
+			player.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, 40, 0, true, false, false));
+		} else {
+			player.addStatusEffect(new StatusEffectInstance(StatusEffects.STRENGTH, 40, 0, true, false, false));
+		}
+	}
+
+	private static void handleStormcaller(ServerPlayerEntity player) {
+		ServerWorld world = (ServerWorld) player.getWorld();
+		if (world.isRaining()) {
+			player.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, 40, 0, true, false, false));
+		}
+	}
+
+	private static void handleHarvester(ServerPlayerEntity player) {
+		player.addStatusEffect(new StatusEffectInstance(StatusEffects.SATURATION, 40, 0, true, false, false));
+		player.addStatusEffect(new StatusEffectInstance(StatusEffects.MINING_FATIGUE, 40, 0, true, false, false));
+	}
+
+	private static void handleHollow(ServerPlayerEntity player) {
+		player.addStatusEffect(new StatusEffectInstance(StatusEffects.ABSORPTION, 40, 0, true, false, false));
+		player.addStatusEffect(new StatusEffectInstance(StatusEffects.DARKNESS, 40, 0, true, false, false));
+	}
+
+	private static boolean isNight(ServerWorld world) {
+		long time = world.getTimeOfDay() % 24000L;
+		return time >= 13000L && time < 23000L;
+	}
+
+	private static void drainHunger(ServerPlayerEntity player, int amount) {
+		int foodLevel = player.getHungerManager().getFoodLevel();
+		player.getHungerManager().setFoodLevel(Math.max(0, foodLevel - amount));
+	}
+
+	private static void onAnyDeath(LivingEntity entity, DamageSource source, LawManager lawManager) {
+		if (!(source.getAttacker() instanceof ServerPlayerEntity attacker)) {
+			return;
+		}
+		if (lawManager.getLaw(attacker.getUuid()) == Law.REAPER) {
+			attacker.addStatusEffect(new StatusEffectInstance(StatusEffects.STRENGTH, 100, 0, true, true, true));
+		}
+	}
+
+	private static void applyAttackerBonuses(DamageSource source, float amount, LawManager lawManager) {
+		if (!(source.getAttacker() instanceof ServerPlayerEntity attacker)) {
+			return;
+		}
+		if (lawManager.getLaw(attacker.getUuid()) == Law.LEECH) {
+			attacker.heal(amount * 0.3f);
+		}
+	}
+
 	private static boolean onAllowDamage(LivingEntity entity, DamageSource source, float amount, LawManager lawManager) {
+		applyAttackerBonuses(source, amount, lawManager);
+
 		if (!(entity instanceof ServerPlayerEntity player)) {
 			return true;
 		}
@@ -173,23 +294,43 @@ public final class LawEffects {
 		}
 
 		if (law == Law.INFERNO && isFireDamage(source)) {
-			float reduced = amount * 0.5f;
-			if (player.getHealth() - reduced > 0.5f) {
-				player.setHealth(player.getHealth() - reduced);
-				return false;
-			}
-			return true;
+			return applyDamageMultiplier(player, amount, 0.5f);
 		}
 
 		if (law == Law.BEACON) {
-			float boosted = amount * 1.1f;
-			if (player.getHealth() - boosted > 0.5f) {
-				player.setHealth(player.getHealth() - boosted);
-				return false;
-			}
-			return true;
+			return applyDamageMultiplier(player, amount, 1.1f);
 		}
 
+		if (law == Law.LEECH) {
+			return applyDamageMultiplier(player, amount, 1.2f);
+		}
+
+		if (law == Law.REAPER && source.getAttacker() instanceof LivingEntity attacker
+				&& !(attacker instanceof ServerPlayerEntity)) {
+			return applyDamageMultiplier(player, amount, 1.2f);
+		}
+
+		if (law == Law.STORMCALLER && source.isOf(DamageTypes.LIGHTNING_BOLT)) {
+			return false;
+		}
+
+		if (law == Law.SUNDER && source.isIn(DamageTypeTags.IS_EXPLOSION)) {
+			return applyDamageMultiplier(player, amount, 0.8f);
+		}
+
+		if (law == Law.SUNDER && source.isIn(DamageTypeTags.IS_PROJECTILE)) {
+			return applyDamageMultiplier(player, amount, 1.2f);
+		}
+
+		return true;
+	}
+
+	private static boolean applyDamageMultiplier(ServerPlayerEntity player, float amount, float multiplier) {
+		float adjusted = amount * multiplier;
+		if (player.getHealth() - adjusted > 0.5f) {
+			player.setHealth(player.getHealth() - adjusted);
+			return false;
+		}
 		return true;
 	}
 
