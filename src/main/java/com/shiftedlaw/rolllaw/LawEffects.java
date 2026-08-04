@@ -54,6 +54,10 @@ public final class LawEffects {
 				continue;
 			}
 
+			if (lawManager.isCountdownActive() && !lawManager.isEliminated(player.getUuid())) {
+				freezePlayer(player);
+			}
+
 			switch (law) {
 				case GRAVITY_ANCHOR -> handleGravityAnchor(player);
 				case CULTIVATOR -> handleCultivator(player);
@@ -62,6 +66,15 @@ public final class LawEffects {
 				case BEACON -> handleBeacon(server, player);
 			}
 		}
+	}
+
+	private static void freezePlayer(ServerPlayerEntity player) {
+		// Slowness alone only throttles the client's own movement prediction; zeroing
+		// velocity every tick also cancels any residual momentum server-side, and
+		// velocityModified forces that zeroed velocity to actually sync to the client.
+		player.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, 30, 250, true, false, false));
+		player.setVelocity(0.0, player.getVelocity().y, 0.0);
+		player.velocityModified = true;
 	}
 
 	private static void handleGravityAnchor(ServerPlayerEntity player) {

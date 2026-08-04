@@ -1,5 +1,6 @@
 package com.shiftedlaw.rolllaw;
 
+import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
@@ -39,6 +40,14 @@ public class LawManager {
 
 	public Law getLaw(UUID playerId) {
 		return assignedLaws.get(playerId);
+	}
+
+	public boolean isCountdownActive() {
+		return countdownActive;
+	}
+
+	public boolean isEliminated(UUID playerId) {
+		return eliminated.contains(playerId);
 	}
 
 	public void startRoll(ServerPlayerEntity player, MinecraftServer server) {
@@ -209,6 +218,7 @@ public class LawManager {
 
 		if (countdownTicks <= 0) {
 			countdownActive = false;
+			unfreezeParticipants(server);
 			broadcast(server, Text.literal("⚡ GO! ⚡").formatted(Formatting.YELLOW, Formatting.BOLD));
 			return;
 		}
@@ -217,6 +227,14 @@ public class LawManager {
 			int secondsRemaining = countdownTicks / 20;
 			if (secondsRemaining >= 1 && secondsRemaining <= 5) {
 				broadcast(server, Text.literal(String.valueOf(secondsRemaining)).formatted(Formatting.RED, Formatting.BOLD));
+			}
+		}
+	}
+
+	private void unfreezeParticipants(MinecraftServer server) {
+		for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+			if (assignedLaws.containsKey(player.getUuid()) && !eliminated.contains(player.getUuid())) {
+				player.removeStatusEffect(StatusEffects.SLOWNESS);
 			}
 		}
 	}
