@@ -1,0 +1,24 @@
+{
+	"schemaVersion": 1,
+	"id": "rolllaw",
+	"version": "${version}",
+	"name": "RollLaw",
+	"description": "Randomly rolls unique Laws onto players and starts a synced countdown once everyone has one.",
+	"authors": [
+		"ShiftedLaw"
+	],
+	"contact": {},
+	"license": "MIT",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.shiftedlaw.rolllaw.RollLawMod"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.16.9",
+		"minecraft": "~1.21.1",
+		"java": ">=21",
+		"fabric-api": "*"
+	}
+}
