@@ -79,6 +79,10 @@ public final class LawEffects {
 	private static void handleCultivator(ServerPlayerEntity player) {
 		if (player.isSprinting()) {
 			player.setSprinting(false);
+			// The client predicts its own sprint speed locally, so just clearing the
+			// server-side flag doesn't reliably stop it; a brief synced Slowness pulse
+			// forces the client's effective speed back down every time sprint is tried.
+			player.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, 10, 1, true, false, false));
 		}
 		if (tickCounter % 20 == 0) {
 			boostNearbyCrops(player);

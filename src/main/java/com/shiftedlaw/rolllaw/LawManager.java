@@ -23,7 +23,7 @@ public class LawManager {
 	private static final int ROLL_PULSE_INTERVAL = 6;
 	private static final int COUNTDOWN_TOTAL_TICKS = 200;
 
-	private static final String[] SUSPENSE_FRAMES = {"❓ ❓ ❓", "❔ ❓ ❔", "❓ ❔ ❓"};
+	private static final String SUSPENSE_TEXT = "> ? ? ? <";
 
 	private final List<Law> pool = new ArrayList<>(List.of(Law.values()));
 	private final Map<UUID, Law> assignedLaws = new HashMap<>();
@@ -82,20 +82,12 @@ public class LawManager {
 		if (server == null) {
 			return;
 		}
-		Law law = assignedLaws.remove(player.getUuid());
+		Law law = assignedLaws.get(player.getUuid());
 		if (law != null) {
-			pool.add(law);
-			broadcast(server, Text.literal(player.getName().getString() + " died! " + law.getDisplayName()
-					+ " returns to the pool.").formatted(Formatting.RED));
+			broadcast(server, Text.literal(player.getName().getString() + " died! Their Law (" + law.getDisplayName()
+					+ ") stays the same. Countdown reset.").formatted(Formatting.RED));
 			cancelCountdown(server);
 		}
-	}
-
-	public void onPlayerRespawn(ServerPlayerEntity player, MinecraftServer server) {
-		if (server == null) {
-			return;
-		}
-		startRoll(player, server);
 	}
 
 	public void onPlayerJoin(ServerPlayerEntity player, MinecraftServer server) {
@@ -124,8 +116,7 @@ public class LawManager {
 	}
 
 	private void broadcastPulse(MinecraftServer server, RollAnimation animation) {
-		String frame = SUSPENSE_FRAMES[(animation.ticksElapsed / ROLL_PULSE_INTERVAL) % SUSPENSE_FRAMES.length];
-		broadcast(server, Text.literal(animation.player.getName().getString() + ": " + frame).formatted(Formatting.GRAY));
+		broadcast(server, Text.literal(animation.player.getName().getString() + " " + SUSPENSE_TEXT).formatted(Formatting.GRAY, Formatting.BOLD));
 	}
 
 	private void finishRoll(MinecraftServer server, RollAnimation animation) {

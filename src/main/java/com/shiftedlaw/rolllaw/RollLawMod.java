@@ -2,7 +2,6 @@ package com.shiftedlaw.rolllaw;
 
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
-import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -27,9 +26,6 @@ public class RollLawMod implements ModInitializer {
 				lawManager.onPlayerDeath(player, player.getServer());
 			}
 		});
-
-		ServerPlayerEvents.AFTER_RESPAWN.register((oldPlayer, newPlayer, alive) ->
-				lawManager.onPlayerRespawn(newPlayer, newPlayer.getServer()));
 
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
 				lawManager.onPlayerJoin(handler.player, server));
