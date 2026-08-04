@@ -275,7 +275,7 @@ public class LawManager {
 		countdownActive = true;
 		countdownTicks = COUNTDOWN_TOTAL_TICKS;
 		broadcast(server, Text.literal("Everyone has their Law! Countdown starting...").formatted(Formatting.AQUA, Formatting.BOLD));
-		broadcastSound(server, SoundEvents.BLOCK_NOTE_BLOCK_BELL, 1.0f, 1.0f);
+		broadcastSound(server, SoundEvents.BLOCK_NOTE_BLOCK_BELL.value(), 1.0f, 1.0f);
 
 		countdownBossBar = new ServerBossBar(Text.literal("Get ready...").formatted(Formatting.GOLD),
 				BossBar.Color.YELLOW, BossBar.Style.NOTCHED_10);
@@ -321,7 +321,7 @@ public class LawManager {
 				}
 				broadcast(server, Text.literal(String.valueOf(secondsRemaining)).formatted(Formatting.RED, Formatting.BOLD));
 				broadcastTitle(server, Text.literal(String.valueOf(secondsRemaining)).formatted(Formatting.RED, Formatting.BOLD), Text.empty());
-				broadcastSound(server, SoundEvents.BLOCK_NOTE_BLOCK_PLING, 1.0f, 1.0f);
+				broadcastSound(server, SoundEvents.BLOCK_NOTE_BLOCK_PLING.value(), 1.0f, 1.0f);
 			}
 		}
 	}
