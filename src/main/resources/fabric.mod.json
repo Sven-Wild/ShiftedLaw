@@ -1,8 +1,8 @@
 {
 	"schemaVersion": 1,
-	"id": "rolllaw",
+	"id": "shiftedlaw",
 	"version": "${version}",
-	"name": "RollLaw",
+	"name": "ShiftedLaw",
 	"description": "Randomly rolls unique Laws onto players and starts a synced countdown once everyone has one.",
 	"authors": [
 		"ShiftedLaw"

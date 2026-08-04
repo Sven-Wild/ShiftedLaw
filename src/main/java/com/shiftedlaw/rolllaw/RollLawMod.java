@@ -10,7 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class RollLawMod implements ModInitializer {
-	public static final String MOD_ID = "rolllaw";
+	public static final String MOD_ID = "shiftedlaw";
 	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
 	private final LawManager lawManager = new LawManager();
@@ -37,6 +37,6 @@ public class RollLawMod implements ModInitializer {
 		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) ->
 				lawManager.onPlayerDisconnect(handler.player, server));
 
-		LOGGER.info("RollLaw initialized.");
+		LOGGER.info("ShiftedLaw initialized.");
 	}
 }
