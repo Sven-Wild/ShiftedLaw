@@ -8,6 +8,7 @@ import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 
 /**
  * Registers the {@code /rolllaw} command (open to everyone) and its
@@ -30,6 +31,8 @@ public final class RollLawCommand {
 		dispatcher.register(CommandManager.literal("rolllaw")
 				.requires(source -> true)
 				.executes(context -> executeRoll(context, lawManager))
+				.then(CommandManager.literal("besttime")
+						.executes(context -> executeBestTime(context, lawManager)))
 				.then(CommandManager.literal("admin")
 						.requires(source -> source.hasPermissionLevel(OP_PERMISSION_LEVEL))
 						.then(CommandManager.literal("start")
@@ -70,6 +73,11 @@ public final class RollLawCommand {
 
 	private static int executeAdminReset(CommandContext<ServerCommandSource> context, LawManager lawManager) {
 		lawManager.adminForceReset(context.getSource().getServer());
+		return 1;
+	}
+
+	private static int executeBestTime(CommandContext<ServerCommandSource> context, LawManager lawManager) {
+		context.getSource().sendFeedback(() -> Text.literal("Best time: " + lawManager.getBestTimeDisplay()).formatted(Formatting.GOLD), false);
 		return 1;
 	}
 }

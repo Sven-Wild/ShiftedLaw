@@ -61,6 +61,7 @@ public class LawManager {
 	private double punishmentZ;
 
 	private int elapsedTicks = 0;
+	private int bestTimeTicks = -1;
 
 	public Law getLaw(UUID playerId) {
 		return assignedLaws.get(playerId);
@@ -169,8 +170,23 @@ public class LawManager {
 		broadcastSound(server, SoundEvents.BLOCK_GLASS_BREAK, 1.0f, 1.0f);
 		LawScoreboard.show(server, this);
 
+		checkLastStanding(server);
 		cancelCountdown(server);
 		checkRoundReset(server);
+	}
+
+	private void checkLastStanding(MinecraftServer server) {
+		if (assignedLaws.size() <= 1) {
+			return;
+		}
+		List<UUID> remaining = assignedLaws.keySet().stream().filter(id -> !eliminated.contains(id)).toList();
+		if (remaining.size() == 1) {
+			ServerPlayerEntity survivor = server.getPlayerManager().getPlayer(remaining.get(0));
+			String name = survivor != null ? survivor.getName().getString() : "Someone";
+			broadcastTitle(server, Text.literal("LAST ONE STANDING").formatted(Formatting.GOLD, Formatting.BOLD),
+					Text.literal(name).formatted(Formatting.YELLOW));
+			broadcastSound(server, SoundEvents.ENTITY_ENDER_DRAGON_GROWL, 1.0f, 1.0f);
+		}
 	}
 
 	public void onPlayerJoin(ServerPlayerEntity player, MinecraftServer server) {
@@ -249,6 +265,36 @@ public class LawManager {
 		if (everyoneEliminated) {
 			startPunishment(server);
 		}
+	}
+
+	/** Human-readable best successful run time, or a placeholder if none yet. */
+	public String getBestTimeDisplay() {
+		return bestTimeTicks < 0 ? "No successful run yet!" : formatTimer(bestTimeTicks);
+	}
+
+	/**
+	 * Called when the Ender Dragon dies during an active run: stops and
+	 * records the timer if it's a new best, celebrates, then starts a fresh
+	 * round so the next attempt can begin.
+	 */
+	public void onDragonDefeated(MinecraftServer server) {
+		if (server == null) {
+			return;
+		}
+		String finalTime = formatTimer(elapsedTicks);
+		boolean isNewBest = bestTimeTicks < 0 || elapsedTicks < bestTimeTicks;
+		if (isNewBest) {
+			bestTimeTicks = elapsedTicks;
+		}
+
+		broadcast(server, Text.literal("The dragon has been defeated in " + finalTime + "!"
+				+ (isNewBest ? " New best time!" : "")).formatted(Formatting.LIGHT_PURPLE, Formatting.BOLD));
+		broadcastTitle(server, Text.literal("VICTORY!").formatted(Formatting.LIGHT_PURPLE, Formatting.BOLD),
+				Text.literal(finalTime + (isNewBest ? " - New Best!" : "")).formatted(Formatting.GOLD));
+		broadcastSound(server, SoundEvents.UI_TOAST_CHALLENGE_COMPLETE, 1.0f, 0.7f);
+
+		resetRound(server, Text.literal("Victory! Roll your Law again with /rolllaw to start a new run.")
+				.formatted(Formatting.LIGHT_PURPLE, Formatting.BOLD));
 	}
 
 	/**
@@ -337,8 +383,11 @@ public class LawManager {
 		cancelCountdown(server);
 		LawScoreboard.hide(server);
 
+		ServerWorld overworld = server.getOverworld();
+		BlockPos spawn = overworld.getSpawnPos();
 		for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
 			player.changeGameMode(GameMode.SURVIVAL);
+			player.teleport(overworld, spawn.getX() + 0.5, spawn.getY(), spawn.getZ() + 0.5, player.getYaw(), player.getPitch());
 			player.setHealth(player.getMaxHealth());
 			player.getHungerManager().setFoodLevel(20);
 			player.removeStatusEffect(StatusEffects.DARKNESS);
